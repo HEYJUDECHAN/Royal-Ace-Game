@@ -1,5 +1,4 @@
-[royal-ace-games (2).html](https://github.com/user-attachments/files/25843639/royal-ace-games.2.html)
-<!DOCTYPE html>
+
 <html lang="en" data-theme="gold">
 <head>
 <meta charset="UTF-8">
