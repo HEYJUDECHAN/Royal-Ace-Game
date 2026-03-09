@@ -1,4 +1,4 @@
-
+[royal-ace-games (2).html](https://github.com/user-attachments/files/25843639/royal-ace-games.2.html)
 <!DOCTYPE html>
 <html lang="en" data-theme="gold">
 <head>
@@ -358,7 +358,10 @@ body::after{content:'';position:fixed;inset:0;z-index:2;pointer-events:none;back
     <div class="sec-title">YOUR STATISTICS</div>
     <div class="sec-sub" id="ss-sub">Loading…</div>
     <div class="sgrid" id="sgrid"></div>
-    <div class="hlbl2">SESSION HISTORY</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div class="hlbl2">SESSION HISTORY</div>
+      <button onclick="resetSave()" style="font-family:'Cinzel',serif;font-size:8px;letter-spacing:3px;padding:6px 14px;background:transparent;border:1px solid rgba(255,80,80,.3);color:rgba(255,100,100,.6);cursor:none;transition:all .25s;" onmouseover="this.style.borderColor='rgba(255,80,80,.7)';this.style.color='#ff8080';" onmouseout="this.style.borderColor='rgba(255,80,80,.3)';this.style.color='rgba(255,100,100,.6)';">RESET PROGRESS</button>
+    </div>
     <div id="hist"></div>
   </div>
 
@@ -462,7 +465,12 @@ setInterval(()=>{jpv+=Math.floor(Math.random()*18+2);const e=document.getElement
 /* ── INTRO ── */
 function enterCasino(){
   document.getElementById('intro').classList.add('gone');
-  setTimeout(()=>{document.getElementById('shell').classList.add('on');document.getElementById('intro').style.display='none';},1400);
+  setTimeout(()=>{
+    document.getElementById('shell').classList.add('on');
+    document.getElementById('intro').style.display='none';
+    // restore persisted balance display
+    document.getElementById('bal').textContent=fm(balance);
+  },1400);
 }
 
 /* ── SECTION SWITCHER ── */
@@ -478,10 +486,63 @@ function showSec(name,tab){
     if(name==='leaderboard')renderLB();}
 }
 
-/* ── STATE ── */
-let balance=5000,bet=50;
+/* ── STATE + PERSISTENCE ── */
 const BETS=[25,50,100,250,500,1000,2500,5000];
-const S={gp:0,wins:0,losses:0,bw:0,tw:0,history:[],ach:{fw:false,bs:false,jp:false,hr:false,bjs:false,cb:false,l7:false,fh:false},bjs:0};
+const SAVE_KEY='royalace_save';
+
+const DEFAULT_STATE={
+  balance:5000,bet:50,
+  gp:0,wins:0,losses:0,bw:0,tw:0,
+  history:[],
+  ach:{fw:false,bs:false,jp:false,hr:false,bjs:false,cb:false,l7:false,fh:false},
+  bjs:0
+};
+
+function loadSave(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY);
+    if(raw){
+      const saved=JSON.parse(raw);
+      // merge so new fields from updates don't break old saves
+      return Object.assign({},DEFAULT_STATE,saved,{ach:Object.assign({},DEFAULT_STATE.ach,saved.ach||{})});
+    }
+  }catch(e){}
+  return Object.assign({},DEFAULT_STATE);
+}
+
+function persistSave(){
+  try{
+    localStorage.setItem(SAVE_KEY,JSON.stringify({
+      balance,bet,
+      gp:S.gp,wins:S.wins,losses:S.losses,bw:S.bw,tw:S.tw,
+      history:S.history.slice(0,60),
+      ach:S.ach,bjs:S.bjs
+    }));
+  }catch(e){}
+}
+
+function resetSave(){
+  if(!confirm('Reset ALL progress? Your balance, stats and achievements will be wiped.'))return;
+  try{localStorage.removeItem(SAVE_KEY);}catch(e){}
+  const d=Object.assign({},DEFAULT_STATE);
+  balance=d.balance;bet=d.bet;
+  Object.assign(S,{gp:0,wins:0,losses:0,bw:0,tw:0,history:[],ach:{fw:false,bs:false,jp:false,hr:false,bjs:false,cb:false,l7:false,fh:false},bjs:0});
+  document.getElementById('bal').textContent=fm(balance);
+  toast('Progress reset · Starting fresh','push');
+  renderStats();
+}
+
+// boot: load saved data
+const _saved=loadSave();
+let balance=_saved.balance;
+let bet=_saved.bet||50;
+const S={gp:_saved.gp,wins:_saved.wins,losses:_saved.losses,bw:_saved.bw,tw:_saved.tw,history:_saved.history,ach:_saved.ach,bjs:_saved.bjs};
+
+// auto-save every 10 seconds as a safety net
+setInterval(persistSave,10000);
+// save when tab is closed / hidden
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistSave();});
+window.addEventListener('beforeunload',persistSave);
 
 function fm(n){return '$'+n.toLocaleString();}
 function setBalance(delta){
@@ -492,8 +553,9 @@ function setBalance(delta){
   el.textContent=fm(balance);el.classList.remove('fw','fl');void el.offsetWidth;
   el.classList.add(delta>0?'fw':'fl');
   checkAch(delta);
+  persistSave();
 }
-function rec(game,res,amt){S.gp++;S.tw+=bet;S.history.unshift({game,res,amt,bal:balance,t:new Date().toLocaleTimeString()});if(S.history.length>60)S.history.pop();}
+function rec(game,res,amt){S.gp++;S.tw+=bet;S.history.unshift({game,res,amt,bal:balance,t:new Date().toLocaleTimeString()});if(S.history.length>60)S.history.pop();persistSave();}
 
 /* ── TOAST ── */
 function toast(msg,type){
