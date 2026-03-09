@@ -1,4 +1,4 @@
-[index (1).html](https://github.com/user-attachments/files/25842967/royal-ace-games.1.html)
+[index.html](https://github.com/user-attachments/files/25842967/royal-ace-games.1.html)
 <!DOCTYPE html>
 <html lang="en" data-theme="gold">
 <head>
