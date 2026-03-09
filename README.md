@@ -1,4 +1,5 @@
-
+[royal-ace-games (3).html](https://github.com/user-attachments/files/25854563/royal-ace-games.3.html)
+<!DOCTYPE html>
 <html lang="en" data-theme="gold">
 <head>
 <meta charset="UTF-8">
@@ -628,12 +629,18 @@ function betBarHTML(){
 function setBet(v,el){bet=v;document.querySelectorAll('.bc').forEach(b=>b.classList.toggle('on',b.textContent===fm(v)));const d=document.getElementById('bcur');if(d)d.textContent=fm(bet);}
 
 /* ── MODAL ── */
-let roulRAF=null;
+let roulRAF=null; // legacy, kept for safety
 function openGame(g){
   const ov=document.getElementById('mov');ov.style.display='flex';requestAnimationFrame(()=>ov.classList.add('open'));
   ({slots:loadSlots,blackjack:loadBJ,poker:loadPoker,roulette:loadRoulette})[g]();
 }
-function closeGame(){const ov=document.getElementById('mov');ov.classList.remove('open');setTimeout(()=>ov.style.display='none',420);if(roulRAF){cancelAnimationFrame(roulRAF);roulRAF=null;}}
+function closeGame(){
+  const ov=document.getElementById('mov');ov.classList.remove('open');
+  setTimeout(()=>ov.style.display='none',420);
+  if(rIdleRAF){cancelAnimationFrame(rIdleRAF);rIdleRAF=null;}
+  if(rSpinRAF){cancelAnimationFrame(rSpinRAF);rSpinRAF=null;}
+  rsp=false;rCtx=null;
+}
 function setModal(t,h){document.getElementById('mtitle').textContent=t;document.getElementById('mbody').innerHTML=h;}
 
 /* ── SHAKE ── */
@@ -1004,8 +1011,14 @@ function thRate5(hand){
 const RORD=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
 const REDS=[1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
 let rwa=0,rba=0,rbr=90,rsp=false,rbet='red';
+let rIdleRAF=null, rSpinRAF=null, rCtx=null;
 
 function loadRoulette(){
+  // stop any previous loops
+  if(rIdleRAF){cancelAnimationFrame(rIdleRAF);rIdleRAF=null;}
+  if(rSpinRAF){cancelAnimationFrame(rSpinRAF);rSpinRAF=null;}
+  rsp=false;
+
   setModal('EUROPEAN ROULETTE',`${betBarHTML()}
     <div class="rlayout">
       <div class="rww">
@@ -1023,17 +1036,29 @@ function loadRoulette(){
     <div class="arow"><button class="bgold" id="rspnb" onclick="spinRoulette()">SPIN THE WHEEL</button></div>`);
   startRoulette();
 }
+
 function setRB(t,el){
   rbet=t;
   document.querySelectorAll('.rbtn').forEach(b=>{const bt=b.dataset.bt;b.className='rbtn'+(bt===t?(t==='red'?' sr':t==='black'?' sb':' sa'):'');});
 }
+
 function startRoulette(){
-  const c=document.getElementById('rlc');if(!c)return;
-  const ctx=c.getContext('2d');
-  function draw(){roulRAF=requestAnimationFrame(draw);if(!document.getElementById('rlc')){cancelAnimationFrame(roulRAF);return;}drawW(ctx);}
-  draw();
+  const c=document.getElementById('rlc');
+  if(!c)return;
+  rCtx=c.getContext('2d');
+  rouletteIdleLoop();
 }
+
+function rouletteIdleLoop(){
+  if(!document.getElementById('rlc')){rIdleRAF=null;return;}
+  // only spin slowly when not in a spin animation
+  if(!rsp) rwa+=0.004;
+  drawW(rCtx);
+  rIdleRAF=requestAnimationFrame(rouletteIdleLoop);
+}
+
 function drawW(ctx){
+  if(!ctx)return;
   const W=210,cx=105,cy=105,n=RORD.length,step=Math.PI*2/n;
   ctx.clearRect(0,0,W,W);
   const rim=ctx.createRadialGradient(cx,cy,78,cx,cy,103);
@@ -1056,29 +1081,49 @@ function drawW(ctx){
   ctx.beginPath();ctx.arc(cx,cy,23,0,Math.PI*2);ctx.fillStyle=hub;ctx.fill();
   ctx.strokeStyle='rgba(200,164,90,.48)';ctx.lineWidth=1;ctx.stroke();
   ctx.beginPath();ctx.arc(cx,cy,5,0,Math.PI*2);ctx.fillStyle='#c8a45a';ctx.fill();
-  // ball shadow
   const bx=cx+rbr*Math.cos(rba),by=cy+rbr*Math.sin(rba);
   ctx.save();ctx.beginPath();ctx.arc(bx+1,by+2,5,0,Math.PI*2);ctx.fillStyle='rgba(0,0,0,.5)';ctx.filter='blur(3px)';ctx.fill();ctx.filter='none';ctx.restore();
-  // ball
   const bg=ctx.createRadialGradient(bx-1.5,by-1.5,0,bx,by,5);
   bg.addColorStop(0,'#fff');bg.addColorStop(.5,'#ddd');bg.addColorStop(1,'#999');
   ctx.beginPath();ctx.arc(bx,by,5,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();
 }
+
 function spinRoulette(){
-  if(rsp)return;if(balance<bet){toast('Insufficient funds','lose');return;}
-  setBalance(-bet);S.tw+=bet;rsp=true;document.getElementById('rspnb').disabled=true;
+  if(rsp)return;
+  if(balance<bet){toast('Insufficient funds','lose');return;}
+  setBalance(-bet);S.tw+=bet;
+  rsp=true;
+  document.getElementById('rspnb').disabled=true;
   const el=document.getElementById('rnd');if(el){el.textContent='';el.className='rnd';}
+
   const target=Math.floor(Math.random()*37);
-  const dur=4200+Math.random()*2000;let st=null;const bwa=rwa,bba=rba;
+  const dur=4200+Math.random()*2000;
+  let st=null;
+  const bwa=rwa, bba=rba;
+
   function anim(ts){
-    if(!st)st=ts;const el2=ts-st,p=Math.min(el2/dur,1);
+    if(!st) st=ts;
+    const elapsed=ts-st;
+    const p=Math.min(elapsed/dur,1);
     const ease=1-Math.pow(1-p,3);
-    rwa=bwa+(Math.PI*2*8+Math.PI)*ease;rba=bba-(Math.PI*2*14+Math.PI)*ease;rbr=90-8*Math.sin(p*Math.PI);
-    if(p<1){roulRAF=requestAnimationFrame(anim);}
-    else{rsp=false;document.getElementById('rspnb').disabled=false;resolveRoulette(target);}
+    rwa=bwa+(Math.PI*2*8+Math.PI)*ease;
+    rba=bba-(Math.PI*2*14+Math.PI)*ease;
+    rbr=90-8*Math.sin(p*Math.PI);
+    // idle loop handles drawing, but during spin we force-draw each frame too
+    drawW(rCtx);
+    if(p<1){
+      rSpinRAF=requestAnimationFrame(anim);
+    } else {
+      rSpinRAF=null;
+      rsp=false;
+      const btn=document.getElementById('rspnb');
+      if(btn) btn.disabled=false;
+      resolveRoulette(target);
+    }
   }
-  cancelAnimationFrame(roulRAF);roulRAF=requestAnimationFrame(anim);
+  rSpinRAF=requestAnimationFrame(anim);
 }
+
 function resolveRoulette(num){
   const isR=REDS.includes(num),col=num===0?'g':isR?'r':'b2',label=num===0?'GREEN':isR?'RED':'BLACK';
   const el=document.getElementById('rnd');if(el){el.textContent=num;el.className='rnd '+col;}
